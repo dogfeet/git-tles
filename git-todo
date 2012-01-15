@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+
+#git branch -a -v
+
+#no_merged=`git branch --no-merged`
+
+underline=$(tput sgr 0 1)
+bold=$(tput bold)
+black=$(tput setaf 0)
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+yellow=$(tput setaf 3)
+blue=$(tput setaf 4)
+magenta=$(tput setaf 5)
+cyan=$(tput setaf 6)
+white=$(tput setaf 7)
+normal=$(tput sgr0)
+
+branches=`git for-each-ref| grep 'commit' | awk '{print $3}' | grep 'refs/heads' `
+
+co_branch=`git symbolic-ref HEAD | sed 's/refs\/heads\///'`
+
+### determine base_branch
+base_branch=`git config todo.base`
+
+if [ "$base_branch" = "" ]; then
+	base_branch='master'
+fi
+
+get_distance() {
+	local head=$1
+	local left=$2
+	local right=$3
+	
+	local distance=`echo $(git rev-list $left..$right | wc -l)`
+	if [ "$distance" = "0" ]; then
+		distance=""
+	else
+		distance="[$head$distance]"
+	fi
+	
+	echo $distance
+}
+
+max_head_len=0
+for branch in $branches; do
+	branch=${branch#refs/heads/}
+	branch=${branch#refs/remotes/}
+	
+	ahead=$(get_distance "+" $base_branch $branch)
+	behind=$(get_distance "-" $branch $base_branch)
+
+	head="$ahead$behind $branch"
+	head_len="${#head}"
+	if [ $max_head_len -lt $head_len ]; then
+		max_head_len=$head_len
+	fi
+done
+
+for branch in $branches; do
+	full_branch=$branch
+	branch=${branch#refs/heads/}	#for local branch
+	branch=${branch#refs/remotes/}	#for remote branch
+	has_merge_base=`echo $(git merge-base $base_branch $branch | wc -l)`
+
+	if [ "$has_merge_base" = "0" ]; then
+		continue
+	fi
+	
+	checkouted='-'
+	if [ "$branch" = "$co_branch" ]; then
+		checkouted="${green}*${normal}"
+	fi
+
+	#last commit info
+	#msg=`git log --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s' -n 1 $branch`
+	msg=`git log --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset - %s' -n 1 $full_branch`
+
+	time=`git log --pretty=format:'%Cgreen(%cr)' -n 1 $full_branch`
+	who=`git log --pretty=format:'%C(bold blue)<%an>%Creset' -n 1 $full_branch`
+
+	#distance from @(base branch)
+	ahead=$(get_distance "+" $base_branch $branch)
+	behind=$(get_distance "-" $branch $base_branch)
+
+	tracked=""
+	if [ "$branch" = "$base_branch" ]; then
+		tracked="[@]"
+	fi
+
+	#echo padding
+	head="$ahead$behind$tracked $branch"
+	headColored="${magenta}$ahead$behind$tracked${normal} ${cyan}$branch${normal}"
+
+	head_len=${#head}
+	padding_len=$(expr $max_head_len - $head_len)
+
+	for i in $(seq 0 $padding_len); do
+		if [ "$i" != "0" ]; then
+			echo -n " "
+		fi
+	done
+
+	#echo
+	echo -e "$headColored $checkouted $msg $time $who"
+done
+
