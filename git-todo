@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# option
+OPTS_BASE='master'
+
 # setup color
 underline=$(tput sgr 0 1)
 bold=$(tput bold)
@@ -51,14 +54,14 @@ get_full_ref() {
 init_refs() {
 	all_refs=`git show-ref| awk '{print $2}'`
 
-	# get base_ref
-	base_ref=`git config todo.base`
+	# get TODO_BASE_FULL
+	local base_ref=`git config todo.base`
 
 	if [ "$base_ref" = "" ]; then
-		base_ref='master'
+		base_ref=$OPTS_BASE
 	fi
 
-	base_ref=$(get_full_ref $base_ref)
+	TODO_BASE_FULL=$(get_full_ref $base_ref)
 }
 
 get_distance() {
@@ -92,36 +95,37 @@ get_distance() {
 #result:
 refs=""
 
-# option
-my_ref="l"
+TODO_REF='local'
 
-while getopts rta opt; do
-	case $opt in
-		r)
-			if [ "$my_ref" != "a" ]; then
-				my_ref="r"
-			fi
-			;;
-		a) my_ref="a";;
-		t) my_ref="t";;
-		?) echo "usage: git todo [-rta]";exit 1;;
-	esac
-done
+init_opts() {
+	while getopts rta opt; do
+		case $opt in
+			r)
+				if [ "$TODO_REF" != "all" ]; then
+					TODO_REF="remote"
+				fi
+				;;
+			a) TODO_REF="all";;
+			t) TODO_REF="tag";;
+			?) echo "usage: git todo [-rta]";exit 1;;
+		esac
+	done
+}
 
 get_refs() {
-	local base_ref=$1
+	local TODO_BASE_FULL=$1
 
 	local ret=""
 	for full_ref in $all_refs; do
 
-		has_merge_base=`echo $(git merge-base $base_ref $full_ref | wc -l)`
+		has_merge_base=`echo $(git merge-base $TODO_BASE_FULL $full_ref | wc -l)`
 
 		if [ "$has_merge_base" = "0" ]; then
 			continue # ex) gh_pages
 		fi
 
-		case "$my_ref" in
-			"l")
+		case "$TODO_REF" in
+			"local")
 				if [[ "$full_ref" =~ "refs/remotes/" ]]; then
 					continue
 				fi
@@ -129,25 +133,25 @@ get_refs() {
 					continue
 				fi
 				;;
-			"r")
+			"remote")
 				if [[ "$full_ref" =~ "refs/tags/" ]]; then
 					continue
 				fi
 				;;
-			"t")
+			"tag")
 				if [[ "$full_ref" =~ "refs/remotes/" ]]; then
 					continue
 				fi
 				;;
 		esac
 
-		if [ "$full_ref" != "$base_ref" ]; then
+		if [ "$full_ref" != "$TODO_BASE_FULL" ]; then
 			ret="$ret $full_ref"
 		fi
 	done
 
 	## make sure base branch first
-	echo "$base_ref $ret"
+	echo "$TODO_BASE_FULL $ret"
 }
 
 ########## checkouted
@@ -192,7 +196,7 @@ init_distance(){
 
 	for full_ref in $refs; do
 		#distance
-		distance=$(get_distance $base_ref $full_ref)
+		distance=$(get_distance $TODO_BASE_FULL $full_ref)
 		distances $full_ref $distance
 	done
 }
@@ -218,9 +222,10 @@ get_max_head_len() {
 main() {
 
 	### init
+	init_opts "$@"
 	init_refs
 
-	local refs=`get_refs $base_ref`
+	local refs=`get_refs $TODO_BASE_FULL`
 
 	init_distance "$refs"
 
