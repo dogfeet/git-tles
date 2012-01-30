@@ -1,3 +1,8 @@
+
+### tools
+
+ * git-todo: A tool for branch summary
+
 ### Install
 
 Put `git-todo` in your excutable path then run:

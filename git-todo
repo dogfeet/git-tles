@@ -70,8 +70,8 @@ get_distance() {
 		base_mark="[@]"
 	fi
 
-	local ahead=`echo $(git rev-list $base...$ref --left-right | grep ">" | wc -l)`
-	local behind=`echo $(git rev-list $base...$ref --left-right | grep "<" | wc -l)`
+	local ahead=`echo $(git rev-list $base..$ref | wc -l)`
+	local behind=`echo $(git rev-list $ref..$base | wc -l)`
 
 	if [ "$ahead" = "0" ]; then
 		ahead=""
