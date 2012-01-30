@@ -52,10 +52,18 @@ get_full_ref() {
 }
 
 init_refs() {
+	local args_base=$1
+
 	all_refs=`git show-ref| awk '{print $2}'`
 
 	# get TODO_BASE_FULL
-	local base_ref=`git config todo.base`
+	local base_ref=''
+
+	if [ "$args_base" = "" ]; then
+		base_ref=`git config todo.base`
+	else
+		base_ref="$args_base"
+	fi
 
 	if [ "$base_ref" = "" ]; then
 		base_ref=$OPTS_BASE
@@ -110,6 +118,7 @@ init_opts() {
 			?) echo "usage: git todo [-rta]";exit 1;;
 		esac
 	done
+
 }
 
 get_refs() {
@@ -223,7 +232,7 @@ main() {
 
 	### init
 	init_opts "$@"
-	init_refs
+	init_refs "$@"
 
 	local refs=`get_refs $TODO_BASE_FULL`
 
