@@ -70,6 +70,11 @@ init_refs() {
 	fi
 
 	TODO_BASE_FULL=$(get_full_ref $base_ref)
+
+	if [ "$TODO_BASE_FULL" = "" ]; then
+		echo "invalid base ref name($base_ref)"
+		exit 1
+	fi
 }
 
 get_distance() {
@@ -115,10 +120,14 @@ init_opts() {
 				;;
 			a) TODO_REF="all";;
 			t) TODO_REF="tag";;
-			?) echo "usage: git todo [-rta]";exit 1;;
+			?) echo "usage: git todo [-rta] base";exit 1;;
+			*) echo "$opt";exit 1;;
 		esac
 	done
 
+	shift $(( $OPTIND - 1 ))
+
+	ARGS_BASE=$1
 }
 
 get_refs() {
@@ -232,7 +241,7 @@ main() {
 
 	### init
 	init_opts "$@"
-	init_refs "$@"
+	init_refs $ARGS_BASE
 
 	local refs=`get_refs $TODO_BASE_FULL`
 
