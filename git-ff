@@ -1,110 +1,119 @@
 #!/usr/bin/env bash
 
 usage(){
-	echo "git ff [remote]"
+    echo "git ff [remote]"
 }
 
 shas_store=""
 
 shas() {
-	local key=$1
-	local value=$2
+    local key=$1
+    local value=$2
 
-	if [ "$value" != "" ]; then
-		shas_store="$shas_store $value:$key"
-	else
-		for pair in $shas_store; do
-			local pair_key=${pair##*:}
-			local pair_value=${pair%%:*}
+    if [ "$value" != "" ]; then
+        shas_store="$shas_store $value:$key"
+    else
+        for pair in $shas_store; do
+            local pair_key=${pair##*:}
+            local pair_value=${pair%%:*}
 
-			if [ "$pair_key" = "$key" ]; then
-				echo $pair_value
-				break
-			fi
-		done
-	fi
+            if [ "$pair_key" = "$key" ]; then
+                echo $pair_value
+                break
+            fi
+        done
+    fi
 }
 
 init(){
-	local remote=$1
-	local pairs=`git show-ref | grep refs/remotes/$remote`
-	local pairs=${pairs// /:}
+    local remote=$1
+    local pairs=`git show-ref | grep refs/remotes/$remote`
+    local pairs=${pairs// /:}
 
-	for pair in $pairs; do
-		shas_store="$shas_store $pair"
-	done
+    for pair in $pairs; do
+        shas_store="$shas_store $pair"
+    done
 }
 
 log(){
-	echo "$@"
+    echo "$@"
 }
 
 main() {
-	local remote=$1
+    local remote=$1
 
-	if [ "$remote" = "" ]; then
-		remote='origin'
-	fi
+    if [ "$remote" = "" ]; then
+        remote='origin'
+    fi
 
-	init
+    if [[ -n $(git status -s 2> /dev/null |grep -v ^# |grep -v "working directory clean") ]]; then
+        echo "Checkouted branch is dirty!"
+        exit 1;
+    fi
 
-	git fetch --prune $remote
+    init
 
-	local branches=`git show-ref | awk '{print $2}' | grep $remote`
+    git fetch $remote
 
-	for full_ref in $branches; do
-		local ref=${full_ref#refs/remotes/}
-		local local_ref=${full_ref#refs/remotes/$remote/}
-		local full_local_ref="refs/heads/$local_ref"
+    local branches=`git show-ref | awk '{print $2}' | grep $remote`
 
-		#has local branch?
-		local has_local_ref=`git show-ref --verify --quiet $full_local_ref; echo $?`
+    for full_ref in $branches; do
+        local ref=${full_ref#refs/remotes/}
+        local local_ref=${full_ref#refs/remotes/$remote/}
+        local full_local_ref="refs/heads/$local_ref"
 
-		if [ "$has_local_ref" != "0" ]; then
-			log "ignored:$full_ref:has no local branch"
-			continue
-		fi
+        log "$full_ref:"
+        #has local branch?
+        local has_local_ref=`git show-ref --verify --quiet $full_local_ref; echo $?`
 
-		#is force-updated?
-		local before_fetched=$(shas $full_ref)
+        if [ "$has_local_ref" != "0" ]; then
+            log "  ignored:has no local branch"
+            continue
+        fi
 
-		if [ "$before_fetched" != "" ]; then
-			local forced=`echo $(git rev-list $full_ref..$before_fetched | wc -l)`
+        #is force-updated?
+        local before_fetched=$(shas $full_ref)
 
-			if [ "$forced" != "0" ]; then
-				log "ignored:$full_ref:force-updated"
-				echo "$ref ignored(force-updated)"
-				continue
-			fi
-		fi
+        if [ "$before_fetched" != "" ]; then
+            local forced=`echo $(git rev-list $full_ref..$before_fetched | wc -l)`
 
-		#check for mergable
-		local has_merge_base=`git merge-base $full_ref $full_local_ref >> /dev/null; echo $?`
+            if [ "$forced" != "0" ]; then
+                log "  ignored:force-updated"
+                echo "$ref ignored(force-updated)"
+                continue
+            fi
+        fi
 
-		if [ "$has_merge_base" != "0" ]; then
-			log "ignored:$full_ref:has no merge-base"
-			continue
-		fi
+        #check for mergable
+        local has_merge_base=`git merge-base $full_ref $full_local_ref >> /dev/null; echo $?`
 
-		local ahead=`echo $(git rev-list $full_ref..$full_local_ref | wc -l)`
-		local behind=`echo $(git rev-list $full_local_ref..$full_ref | wc -l)`
+        if [ "$has_merge_base" != "0" ]; then
+            log "  ignored:has no merge-base"
+            continue
+        fi
 
-		#Remote branch changed
-		if [ "$behind" != "0" ]; then
-			if [ "$ahead" != "0" ]; then
-				#rebase local changes
-				git rebase $full_ref $full_local_ref
-				log "rebased:$full_ref"
-			else
-				#fast-forward merge, cos local branch has no changes
-				git merge $full_ref $full_local_ref
-				log "merged:$full_ref"
-			fi
-		else
-			log "$full_ref is not changed"
-		fi
+        local ahead=`echo $(git rev-list $full_ref..$full_local_ref | wc -l)`
+        local behind=`echo $(git rev-list $full_local_ref..$full_ref | wc -l)`
 
-	done
+        #Remote branch changed
+        log "  [+$ahead][-$behind]"
+        if [ "$behind" != "0" ]; then
+            git checkout $local_ref
+            log "  git checkout $local_ref"
+            if [ "$ahead" != "0" ]; then
+                #rebase local changes
+                git rebase $full_ref
+                log "  git rebase $full_ref"
+            else
+                #fast-forward merge, cos local branch has no changes
+                git merge $full_ref
+                log "  git merge $full_ref"
+            fi
+        else
+            log "  not changed"
+        fi
+
+    done
 }
 
 main "$@"
