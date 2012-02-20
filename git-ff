@@ -53,7 +53,7 @@ main() {
 
     init
 
-    git fetch $remote
+    git fetch --prune $remote
 
     local branches=`git show-ref | awk '{print $2}' | grep $remote`
 
