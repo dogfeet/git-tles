@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 
+# setup color
+underline=$(tput sgr 0 1)
+bold=$(tput bold)
+black=$(tput setaf 0)
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+yellow=$(tput setaf 3)
+blue=$(tput setaf 4)
+magenta=$(tput setaf 5)
+cyan=$(tput setaf 6)
+white=$(tput setaf 7)
+normal=$(tput sgr0)
+
 usage(){
     echo "git ff [remote]"
 }
@@ -39,6 +52,31 @@ log(){
     echo "$@"
 }
 
+is_force_updated(){
+    local full_ref=$1
+    local fetched=$(shas $full_ref)
+
+    if [ "$fetched" != "" ]; then
+        local forced=`echo $(git rev-list $full_ref..$before_fetched | wc -l)`
+
+        if [ "$forced" != "0" ]; then
+            echo "0"
+        fi
+    fi
+
+    echo "-1";
+}
+
+is_mergable() {
+    local full_ref=$1
+    local full_local_ref=$2
+
+    #check for mergable
+    local has_merge_base=`git merge-base $full_ref $full_local_ref >> /dev/null; echo $?`
+
+    echo "$has_merge_base"
+}
+
 main() {
     local remote=$1
 
@@ -61,58 +99,40 @@ main() {
         local ref=${full_ref#refs/remotes/}
         local local_ref=${full_ref#refs/remotes/$remote/}
         local full_local_ref="refs/heads/$local_ref"
+        local head="[ignored]"
+        local body=""
+        local distance=''
 
-        log "$full_ref:"
+        body="$cyan$full_ref$normal"
         #has local branch?
         local has_local_ref=`git show-ref --verify --quiet $full_local_ref; echo $?`
 
         if [ "$has_local_ref" != "0" ]; then
-            log "  ignored:has no local branch"
-            continue
-        fi
+            body="$body: has no local branch"
+        elif [ "$(is_force_updated $full_ref)" == "0" ]; then
+            head="$red[force-updated]"
+        elif [ "$(is_mergable $full_ref $full_local_ref)" == "0" ]; then
+            local ahead=`echo $(git rev-list $full_ref..$full_local_ref | wc -l)`
+            local behind=`echo $(git rev-list $full_local_ref..$full_ref | wc -l)`
 
-        #is force-updated?
-        local before_fetched=$(shas $full_ref)
+            #Remote branch changed
+            distance=": $magenta[+$ahead][-$behind]"
 
-        if [ "$before_fetched" != "" ]; then
-            local forced=`echo $(git rev-list $full_ref..$before_fetched | wc -l)`
-
-            if [ "$forced" != "0" ]; then
-                log "  ignored:force-updated"
-                echo "$ref ignored(force-updated)"
-                continue
+            if [ "$behind" != "0" ]; then
+                git checkout $local_ref
+                if [ "$ahead" != "0" ]; then
+                    head="$yellow[rebased]"
+                    #rebase local changes
+                    git rebase $full_ref
+                else
+                    head="$yellow[merged]"
+                    #fast-forward merge, cos local branch has no changes
+                    git merge $full_ref
+                fi
             fi
         fi
 
-        #check for mergable
-        local has_merge_base=`git merge-base $full_ref $full_local_ref >> /dev/null; echo $?`
-
-        if [ "$has_merge_base" != "0" ]; then
-            log "  ignored:has no merge-base"
-            continue
-        fi
-
-        local ahead=`echo $(git rev-list $full_ref..$full_local_ref | wc -l)`
-        local behind=`echo $(git rev-list $full_local_ref..$full_ref | wc -l)`
-
-        #Remote branch changed
-        log "  [+$ahead][-$behind]"
-        if [ "$behind" != "0" ]; then
-            git checkout $local_ref
-            log "  git checkout $local_ref"
-            if [ "$ahead" != "0" ]; then
-                #rebase local changes
-                git rebase $full_ref
-                log "  git rebase $full_ref"
-            else
-                #fast-forward merge, cos local branch has no changes
-                git merge $full_ref
-                log "  git merge $full_ref"
-            fi
-        else
-            log "  not changed"
-        fi
-
+        echo "[ff]$head$body $distance$normal"
     done
 }
 
