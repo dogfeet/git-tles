@@ -4,104 +4,107 @@
 OPTS_BASE='master'
 
 # setup color
-underline=$(tput sgr 0 1)
-bold=$(tput bold)
-black=$(tput setaf 0)
-red=$(tput setaf 1)
-green=$(tput setaf 2)
-yellow=$(tput setaf 3)
-blue=$(tput setaf 4)
-magenta=$(tput setaf 5)
-cyan=$(tput setaf 6)
-white=$(tput setaf 7)
-normal=$(tput sgr0)
+# msysgit has no tput, I am looking for getting color codes for mingw32 env
+if [ `expr "$(uname)" : "MING"` = 0 ]; then
+    underline=$(tput sgr 0 1)
+    bold=$(tput bold)
+    black=$(tput setaf 0)
+    red=$(tput setaf 1)
+    green=$(tput setaf 2)
+    yellow=$(tput setaf 3)
+    blue=$(tput setaf 4)
+    magenta=$(tput setaf 5)
+    cyan=$(tput setaf 6)
+    white=$(tput setaf 7)
+    normal=$(tput sgr0)
+fi
 
 get_short_ref_colored() {
-	local full_ref=$1
+    local full_ref=$1
 
-	if [[ "$full_ref" =~ "refs/remotes/" ]]; then
-		echo -n "$yellow$(get_short_ref $full_ref)"
-	elif [[ "$full_ref" =~ "refs/tags/" ]]; then
-		echo -n "$normal$(get_short_ref $full_ref)"
-	else
-		echo -n "$cyan$(get_short_ref $full_ref)"
-	fi
+    if [ `expr "$full_ref" : ".*refs/remotes/"` != 0 ]; then
+        echo -n "$yellow$(get_short_ref $full_ref)"
+    elif [ `expr "$full_ref" : ".*refs/tags/"` != 0 ]; then
+        echo -n "$normal$(get_short_ref $full_ref)"
+    else
+        echo -n "$cyan$(get_short_ref $full_ref)"
+    fi
 }
 
 get_short_ref() {
-	local ref=$1
+    local ref=$1
 
-	ref=${ref#refs/heads/}	#for local refs
-	ref=${ref#refs/remotes/}	#for remote refs
-	ref=${ref#refs/tags/}	#for tags
+    ref=${ref#refs/heads/}    #for local refs
+    ref=${ref#refs/remotes/}    #for remote refs
+    ref=${ref#refs/tags/}    #for tags
 
-	echo $ref
+    echo $ref
 }
 
 get_full_ref() {
-	local short=$1
+    local short=$1
 
-	for full_ref in $all_refs; do
-		local shorten=$(get_short_ref $full_ref)
+    for full_ref in $all_refs; do
+        local shorten=$(get_short_ref $full_ref)
 
-		if [ "$shorten" = "$short" ]; then
-			echo $full_ref
-			break
-		fi
-	done
+        if [ "$shorten" = "$short" ]; then
+            echo $full_ref
+            break
+        fi
+    done
 }
 
 init_refs() {
-	local args_base=$1
+    local args_base=$1
 
-	all_refs=`git show-ref| awk '{print $2}'`
+    all_refs=`git show-ref| awk '{print $2}'`
 
-	# get TODO_BASE_FULL
-	local base_ref=''
+    # get TODO_BASE_FULL
+    local base_ref=''
 
-	if [ "$args_base" = "" ]; then
-		base_ref=`git config todo.base`
-	else
-		base_ref="$args_base"
-	fi
+    if [ "$args_base" = "" ]; then
+        base_ref=`git config todo.base`
+    else
+        base_ref="$args_base"
+    fi
 
-	if [ "$base_ref" = "" ]; then
-		base_ref=$OPTS_BASE
-	fi
+    if [ "$base_ref" = "" ]; then
+        base_ref=$OPTS_BASE
+    fi
 
-	TODO_BASE_FULL=$(get_full_ref $base_ref)
+    TODO_BASE_FULL=$(get_full_ref $base_ref)
 
-	if [ "$TODO_BASE_FULL" = "" ]; then
-		echo "invalid base ref name($base_ref)"
-		exit 1
-	fi
+    if [ "$TODO_BASE_FULL" = "" ]; then
+        echo "invalid base ref name($base_ref)"
+        exit 1
+    fi
 }
 
 get_distance() {
-	local base=$1
-	local ref=$2
+    local base=$1
+    local ref=$2
 
-	local base_mark=""
-	if [ "$ref" = "$base" ]; then
-		base_mark="[@]"
-	fi
+    local base_mark=""
+    if [ "$ref" = "$base" ]; then
+        base_mark="[@]"
+    fi
 
-	local ahead=`echo $(git rev-list $base..$ref | wc -l)`
-	local behind=`echo $(git rev-list $ref..$base | wc -l)`
+    local ahead=`echo $(git rev-list $base..$ref | wc -l)`
+    local behind=`echo $(git rev-list $ref..$base | wc -l)`
 
-	if [ "$ahead" = "0" ]; then
-		ahead=""
-	else
-		ahead="[+$ahead]"
-	fi
-	
-	if [ "$behind" = "0" ]; then
-		behind=""
-	else
-		behind="[-$behind]"
-	fi
-	
-	echo "$base_mark$ahead$behind"
+    if [ "$ahead" = "0" ]; then
+        ahead=""
+    else
+        ahead="[+$ahead]"
+    fi
+    
+    if [ "$behind" = "0" ]; then
+        behind=""
+    else
+        behind="[-$behind]"
+    fi
+    
+    echo "$base_mark$ahead$behind"
 }
 
 ######### refs
@@ -111,78 +114,77 @@ refs=""
 TODO_REF='local'
 
 init_opts() {
-	while getopts rta opt; do
-		case $opt in
-			r)
-				if [ "$TODO_REF" != "all" ]; then
-					TODO_REF="remote"
-				fi
-				;;
-			a) TODO_REF="all";;
-			t) TODO_REF="tag";;
-			?) echo "usage: git todo [-rta] base";exit 1;;
-			*) echo "$opt";exit 1;;
-		esac
-	done
+    while getopts rta opt; do
+        case $opt in
+            r)
+                if [ "$TODO_REF" != "all" ]; then
+                    TODO_REF="remote"
+                fi
+                ;;
+            a) TODO_REF="all";;
+            t) TODO_REF="tag";;
+            ?) echo "usage: git todo [-rta] base";exit 1;;
+            *) echo "$opt";exit 1;;
+        esac
+    done
 
-	shift $(( $OPTIND - 1 ))
+    shift $(( $OPTIND - 1 ))
 
-	ARGS_BASE=$1
+    ARGS_BASE=$1
 }
 
 get_refs() {
-	local TODO_BASE_FULL=$1
+    local TODO_BASE_FULL=$1
 
-	local ret=""
-	for full_ref in $all_refs; do
+    local ret=""
+    for full_ref in $all_refs; do
 
-		has_merge_base=`echo $(git merge-base $TODO_BASE_FULL $full_ref | wc -l)`
+        has_merge_base=`echo $(git merge-base $TODO_BASE_FULL $full_ref | wc -l)`
 
-		if [ "$has_merge_base" = "0" ]; then
-			continue # ex) gh_pages
-		fi
+        if [ "$has_merge_base" = "0" ]; then
+            continue # ex) gh_pages
+        fi
 
-		case "$TODO_REF" in
-			"local")
-				if [[ "$full_ref" =~ "refs/remotes/" ]]; then
-					continue
-				fi
-				if [[ "$full_ref" =~ "refs/tags/" ]]; then
-					continue
-				fi
-				;;
-			"remote")
-				if [[ "$full_ref" =~ "refs/tags/" ]]; then
-					continue
-				fi
-				;;
-			"tag")
-				if [[ "$full_ref" =~ "refs/remotes/" ]]; then
-					continue
-				fi
-				;;
-		esac
+        case "$TODO_REF" in
+            "local")
+                if [ `expr "$full_ref" : ".*refs/remotes/"` != 0 ]; then
+                    continue
+                fi
+                if [ `expr "$full_ref" : ".*refs/tags/"` != 0 ]; then
+                    continue
+                fi
+                ;;
+            "remote")
+                if [ `expr "$full_ref" : ".*refs/tags/"` != 0 ]; then
+                    continue
+                fi
+                ;;
+            "tag")
+                if [ `expr "$full_ref" : ".*refs/remotes/"` != 0 ]; then
+                    continue
+                fi
+                ;;
+        esac
 
-		if [ "$full_ref" != "$TODO_BASE_FULL" ]; then
-			ret="$ret $full_ref"
-		fi
-	done
+        if [ "$full_ref" != "$TODO_BASE_FULL" ]; then
+            ret="$ret $full_ref"
+        fi
+    done
 
-	## make sure base branch first
-	echo "$TODO_BASE_FULL $ret"
+    ## make sure base branch first
+    echo "$TODO_BASE_FULL $ret"
 }
 
 ########## checkouted
 checkouted_ref=`git symbolic-ref HEAD`
 get_checkouted() {
-	local full_ref=$1
+    local full_ref=$1
 
-	checkouted='-'
-	if [ "$full_ref" = "$checkouted_ref" ]; then
-		checkouted="${green}*${normal}"
-	fi
-
-	echo $checkouted
+    if [ "$full_ref" = "$checkouted_ref" ]; then
+        echo "${green}*${normal}"
+    else
+        echo "-"
+    fi
 }
 
 ######### distance
@@ -191,87 +193,87 @@ max_head_len=0
 distance_store=""
 
 distances() {
-	local key=$1
-	local value=$2
+    local key=$1
+    local value=$2
 
-	if [ "$value" != "" ]; then
-		distance_store="$distance_store $key:$value"
-	else
-		for pair in $distance_store; do
-			local pair_key=${pair%%:*}
-			local pair_value=${pair##*:}
+    if [ "$value" != "" ]; then
+        distance_store="$distance_store $key:$value"
+    else
+        for pair in $distance_store; do
+            local pair_key=${pair%%:*}
+            local pair_value=${pair##*:}
 
-			if [ "$pair_key" = "$key" ]; then
-				echo $pair_value
-				break
-			fi
-		done
-	fi
+            if [ "$pair_key" = "$key" ]; then
+                echo $pair_value
+                break
+            fi
+        done
+    fi
 }
 
 init_distance(){
-	local refs=$1
+    local refs=$1
 
-	for full_ref in $refs; do
-		#distance
-		distance=$(get_distance $TODO_BASE_FULL $full_ref)
-		distances $full_ref $distance
-	done
+    for full_ref in $refs; do
+        #distance
+        distance=$(get_distance $TODO_BASE_FULL $full_ref)
+        distances $full_ref $distance
+    done
 }
 
 get_max_head_len() {
-	local refs=$1
+    local refs=$1
 
-	for full_ref in $refs; do
-		local ref=$(get_short_ref $full_ref)
+    for full_ref in $refs; do
+        local ref=$(get_short_ref $full_ref)
 
-		local distance=$(distances $full_ref)
+        local distance=$(distances $full_ref)
 
-		local head="$distance $ref"
-		local head_len="${#head}"
-		if [ $max_head_len -lt $head_len ]; then
-			local max_head_len=$head_len
-		fi
-	done
+        local head="$distance $ref"
+        local head_len="${#head}"
+        if [ $max_head_len -lt $head_len ]; then
+            local max_head_len=$head_len
+        fi
+    done
 
-	echo $max_head_len
+    echo $max_head_len
 }
 
 main() {
 
-	### init
-	init_opts "$@"
-	init_refs $ARGS_BASE
+    ### init
+    init_opts "$@"
+    init_refs $ARGS_BASE
 
-	local refs=`get_refs $TODO_BASE_FULL`
+    local refs=`get_refs $TODO_BASE_FULL`
 
-	init_distance "$refs"
+    init_distance "$refs"
 
-	local max_head_len=$(get_max_head_len "$refs")
+    local max_head_len=$(get_max_head_len "$refs")
 
-	### main
-	for full_ref in $refs; do
-		ref=$(get_short_ref $full_ref)
+    ### main
+    for full_ref in $refs; do
+        ref=$(get_short_ref $full_ref)
 
-		#last commit info
-		#msg=`git log --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s' -n 1 $ref`
-		local msg=`git log --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset - %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' -n 1 $full_ref`
+        #last commit info
+        #msg=`git log --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s' -n 1 $ref`
+        local msg=`git log --abbrev-commit --date=relative --pretty=format:'%Cred%h%Creset - %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' -n 1 $full_ref`
 
-		#time=`git log --pretty=format:'%Cgreen(%cr)' -n 1 $full_ref`
-		#who=`git log --pretty=format:'%C(bold blue)<%an>%Creset' -n 1 $full_ref`
+        #time=`git log --pretty=format:'%Cgreen(%cr)' -n 1 $full_ref`
+        #who=`git log --pretty=format:'%C(bold blue)<%an>%Creset' -n 1 $full_ref`
 
-		distance=$(distances $full_ref)
+        distance=$(distances $full_ref)
 
-		#echo padding
-		head="$distance $ref"
-		head_len=${#head}
-		padding_len=$(expr $max_head_len - $head_len)
+        #echo padding
+        head="$distance $ref"
+        head_len=${#head}
+        padding_len=$(expr $max_head_len - $head_len)
 
-		#echo
-		padding=`printf "%${padding_len}s" ""` #padding
-		head_colored="${magenta}$distance $(get_short_ref_colored $full_ref)${normal}"
-		echo -e "$padding$head_colored $(get_checkouted $full_ref) $msg $time $who"
-	done
+        #echo
+        padding=`printf "%${padding_len}s" ""` #padding
+        head_colored="${magenta}$distance $(get_short_ref_colored $full_ref)${normal}"
+        echo -e "$padding$head_colored $(get_checkouted $full_ref) $msg $time $who"
+    done
 }
 
 main "$@"
