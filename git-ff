@@ -109,6 +109,7 @@ main() {
 
         if [ "$has_local_ref" != "0" ]; then
             body="$body: has no local branch"
+            continue;
         elif [ "$(is_force_updated $full_ref)" == "0" ]; then
             head="$red[force-updated]"
         elif [ "$(is_mergable $full_ref $full_local_ref)" == "0" ]; then
@@ -121,9 +122,9 @@ main() {
             if [ "$behind" != "0" ]; then
                 git checkout $local_ref
                 if [ "$ahead" != "0" ]; then
-                    head="$yellow[rebased]"
+                    head="$red[rebase]"
                     #rebase local changes
-                    git rebase $full_ref
+                    #git rebase $full_ref
                 else
                     head="$yellow[merged]"
                     #fast-forward merge, cos local branch has no changes
