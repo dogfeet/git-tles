@@ -99,7 +99,7 @@ main() {
         local ref=${full_ref#refs/remotes/}
         local local_ref=${full_ref#refs/remotes/$remote/}
         local full_local_ref="refs/heads/$local_ref"
-        local head="[ignored]"
+        local head="[pass]"
         local body=""
         local distance=''
 
