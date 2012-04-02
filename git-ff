@@ -77,6 +77,50 @@ is_mergable() {
     echo "$has_merge_base"
 }
 
+git_ff(){
+    local full_ref=$1
+    local ref=$2
+    local local_ref=$3
+    local full_local_ref=$4
+
+    local head="[pass]"
+    local body=""
+    local distance=''
+
+    body="$cyan$full_ref$normal"
+    #has local branch?
+    local has_local_ref=`git show-ref --verify --quiet $full_local_ref; echo $?`
+
+    if [ "$has_local_ref" != "0" ]; then
+        body="$body: has no local branch"
+        continue;
+    elif [ "$(is_force_updated $full_ref)" == "0" ]; then
+        head="$red[force-updated]"
+    elif [ "$(is_mergable $full_ref $full_local_ref)" == "0" ]; then
+        local ahead=`echo $(git rev-list $full_ref..$full_local_ref | wc -l)`
+        local behind=`echo $(git rev-list $full_local_ref..$full_ref | wc -l)`
+
+        #Remote branch changed
+        distance=": $magenta[+$ahead][-$behind]"
+
+        if [ "$behind" != "0" ]; then
+            git checkout $local_ref
+            if [ "$ahead" != "0" ]; then
+                head="$red[rebase]"
+                #rebase local changes
+                #git rebase $full_ref
+            else
+                head="$yellow[merged]"
+                #fast-forward merge, cos local branch has no changes
+                git merge $full_ref
+            fi
+        fi
+    fi
+
+    echo "[ff]$head$body $distance$normal"
+
+}
+
 main() {
     local remote=$1
 
@@ -91,50 +135,25 @@ main() {
 
     init
 
-    git fetch --prune $remote
+    git config svn-remote.svn.url
 
-    local branches=`git show-ref | awk '{print $2}' | grep $remote`
+    if [ "$remote" = "origin" ] && [ "`git config svn-remote.svn.url`" != "" ]; then
+        git svn fetch
 
-    for full_ref in $branches; do
-        local ref=${full_ref#refs/remotes/}
-        local local_ref=${full_ref#refs/remotes/$remote/}
-        local full_local_ref="refs/heads/$local_ref"
-        local head="[pass]"
-        local body=""
-        local distance=''
+        git_ff "trunk" "trunk" "master" "refs/heads/master"
+    else
+        git fetch --prune $remote
 
-        body="$cyan$full_ref$normal"
-        #has local branch?
-        local has_local_ref=`git show-ref --verify --quiet $full_local_ref; echo $?`
+        local branches=`git show-ref | awk '{print $2}' | grep $remote`
 
-        if [ "$has_local_ref" != "0" ]; then
-            body="$body: has no local branch"
-            continue;
-        elif [ "$(is_force_updated $full_ref)" == "0" ]; then
-            head="$red[force-updated]"
-        elif [ "$(is_mergable $full_ref $full_local_ref)" == "0" ]; then
-            local ahead=`echo $(git rev-list $full_ref..$full_local_ref | wc -l)`
-            local behind=`echo $(git rev-list $full_local_ref..$full_ref | wc -l)`
+        for full_ref in $branches; do
+            local ref=${full_ref#refs/remotes/}
+            local local_ref=${full_ref#refs/remotes/$remote/}
+            local full_local_ref="refs/heads/$local_ref"
 
-            #Remote branch changed
-            distance=": $magenta[+$ahead][-$behind]"
-
-            if [ "$behind" != "0" ]; then
-                git checkout $local_ref
-                if [ "$ahead" != "0" ]; then
-                    head="$red[rebase]"
-                    #rebase local changes
-                    #git rebase $full_ref
-                else
-                    head="$yellow[merged]"
-                    #fast-forward merge, cos local branch has no changes
-                    git merge $full_ref
-                fi
-            fi
-        fi
-
-        echo "[ff]$head$body $distance$normal"
-    done
+            git_ff $full_ref $ref $local_ref $full_local_ref
+        done
+    fi
 }
 
 main "$@"
