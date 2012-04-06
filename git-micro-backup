@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+# setup color
+underline=$(tput sgr 0 1)
+bold=$(tput bold)
+black=$(tput setaf 0)
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+yellow=$(tput setaf 3)
+blue=$(tput setaf 4)
+magenta=$(tput setaf 5)
+cyan=$(tput setaf 6)
+white=$(tput setaf 7)
+normal=$(tput sgr0)
+
+usage(){
+    echo "git ff [remote]"
+}
+
+main() {
+    local mb=$1
+    local origin=$2
+
+    if [[ -n $(git status -s 2> /dev/null |grep -v ^# |grep -v "working directory clean") ]]; then
+        echo "Checkouted branch is dirty!"
+        exit 1;
+    fi
+
+    ## fetch all
+    if [ "$origin" = "" ]; then
+        origin='origin'
+        echo "micro-backup> git ff $origin"
+        git ff $origin
+    fi
+
+    if [ "$mb" = "" ]; then
+        mb='mb'
+        echo "micro-backup> git ff $mb"
+        git ff $mb
+    fi
+
+    echo "micro-backup> staring... "
+
+    local mb_branches=`git show-ref | awk '{print$2}' | grep "refs/remotes/$mb" | grep -v '/master'`
+    local origin_branches=`git show-ref | awk '{print$2}' | grep "refs/remotes/$origin" | grep -v '/master'`
+    local local_branches=`git show-ref | awk '{print$2}' | grep 'refs/heads' | grep -v '/master'`
+
+
+    for full_local_ref in $local_branches; do
+        local local_ref=${full_local_ref#refs/heads/}
+        local full_origin_ref="refs/remotes/$origin/$local_ref"
+        local full_mb_ref="refs/remotes/$mb/$local_ref"
+
+        local has_origin_the_branch=`echo $origin_branches | grep $full_origin_ref`
+        local has_mb_the_branch=`echo $mb_branches | grep $full_mb_ref`
+
+        if [ "$has_origin_the_branch" = "" ]; then
+            ## no origin branch
+            local origin_ahead=1
+        else
+            local origin_ahead=`echo $(git rev-list $full_origin_ref..$full_local_ref | wc -l)`
+        fi
+
+        if [ "$origin_ahead" = "0" ]; then
+            ## delete if exist
+
+            if [ "$has_mb_the_branch" != "" ]; then
+                echo "micro-backup> git push $mb :$local_ref"
+                git push $mb ":$local_ref"
+            fi
+        else
+            if [ "$has_mb_the_branch" != "" ]; then
+                local mb_ahead=`echo $(git rev-list $full_mb_ref..$full_local_ref | wc -l)`
+            else
+                local mb_ahead=1
+            fi
+
+            ## backup if possible as fast-forward push
+            if [ "$mb_ahead" != "0" ]; then
+                echo "micro-backup> git push $mb $local_ref"
+                git push $mb $local_ref
+            fi
+        fi
+    done
+}
+
+main "$@"
+
