@@ -133,6 +133,9 @@ main() {
         exit 1;
     fi
 
+    ## bakcup current branch.
+    local current_branch=$(git symbolic-ref HEAD 2> /dev/null)
+
     init
 
     git config svn-remote.svn.url
@@ -153,6 +156,13 @@ main() {
 
             git_ff $full_ref $ref $local_ref $full_local_ref
         done
+    fi
+
+    ## restore current branch.
+    local temp=$(git symbolic-ref HEAD 2> /dev/null)
+
+    if [ "$current_branch" != "" ] && [ "$current_branch" != "temp" ]; then
+        git checkout ${current_branch#refs/heads/}
     fi
 }
 
