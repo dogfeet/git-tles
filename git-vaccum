@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+# option
+VACCUM_BRANCH=$1
+PATTERN=$2
+
+get_short_ref() {
+    local ref=$1
+
+    ref=${ref#refs/heads/}    #for local refs
+    ref=${ref#refs/remotes/}    #for remote refs
+    ref=${ref#refs/tags/}    #for tags
+
+    echo $ref
+}
+
+main() {
+
+    ### check
+    if [[ "$VACCUM_BRANCH" = "" || "$PATTERN" = "" ]]; then
+        echo "usage: git vaccum [base branch] [pattern]"
+        echo "    You have to test 'git br -a | grep [pattern]'!!"
+        exit 1;
+    fi
+
+    git show-branch $VACCUM_BRANCH
+    if [ "$?" = "128" ]; then
+        echo "$VACCUM_BRANCH does not exist"
+        exit 128;
+    fi
+
+    if [[ -n $(git status -s 2> /dev/null |grep -v ^# |grep -v "working directory clean") ]]; then
+        echo "Checkouted branch is dirty!"
+        exit 1;
+    fi
+
+    ### init
+    local refs=`git show-ref| grep $PATTERN | awk '{print $2}'`
+
+    #local checkouted_ref=`git symbolic-ref HEAD`
+
+    git co -b "$VACCUM_BRANCH-vaccum" $VACCUM_BRANCH
+
+    ### main
+    for full_ref in $refs; do
+        ref=$(get_short_ref $full_ref)
+
+        git merge $ref
+    done
+}
+
+main "$@"
+
